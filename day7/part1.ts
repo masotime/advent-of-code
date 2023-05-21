@@ -1,36 +1,153 @@
 import input from './input';
 
-type DetectorMap = {
-    [char: string]: number
+type Path = Array<string>;
+type Entry = { type: 'file', size: number } | { type: 'directory', content: Folder };
+type Folder = {
+    name: string,
+    contents: {
+        [name: string]: Entry
+    },
+    size?: number
 };
+type Context = {
+    cwd: Path,
+    root: Folder
+};
+type CommandType = 'ls' | 'cd';
 
-function detectStart(buffer: string) {
-    const detectorMap: DetectorMap = {};
-    let lastIndex = 0;
-    
-    while (Object.keys(detectorMap).length < 4 && lastIndex < buffer.length) {
-        const currentChar = buffer[lastIndex];
-        if (lastIndex > 3) {
-            // remove the key at lastIndex - 4
-            const charToRemove = buffer[lastIndex - 4];
-            detectorMap[charToRemove] -= 1;
-            if (detectorMap[charToRemove] === 0) {
-                delete detectorMap[charToRemove];
-            }
-        }
-        detectorMap[currentChar] = (detectorMap[currentChar] || 0) + 1;
-        lastIndex += 1;
+function processCd({ cdLocation, context }: { cdLocation: string, context: Context }): Path {
+    const cwd = context.cwd;
+
+    switch (cdLocation) {
+        case '/':
+            cwd.length = 0;
+            break;
+        case '..':
+            cwd.pop();
+            break;
+        default:
+            cwd.push(cdLocation); 
     }
 
-    return lastIndex;
+    return cwd;
+}
+
+function navigateToPath({ root, cwd }: Context): Folder {
+    let currentFolder: Folder = root;
+    let currentFolderPath = '/';
+    for (const folder of cwd) {
+        const nextNavEntry = currentFolder.contents[folder];
+        if (nextNavEntry.type === 'directory') {
+            currentFolder = nextNavEntry.content;
+            currentFolderPath += `${folder}/`;
+        } else {
+            throw new Error(`Invalid path /${cwd.join('/')}, could not navigate to ${folder} while in ${currentFolderPath}`);
+        }
+    }
+
+    return currentFolder;
+}
+
+function processLs({ output, context } : { output: Array<string>, context: Context }): Folder {
+    const cwdFolder = navigateToPath(context);
+    for (const line of output) {
+        const [typeOrLength, name] = line.split(' ') as [string, string];
+        if (typeOrLength === 'dir') {
+            cwdFolder.contents[name] = { type: 'directory', content: { name, contents: {} }};
+        } else {
+            const size = parseInt(typeOrLength, 10);
+            cwdFolder.contents[name] = { type: 'file', size };
+        };
+    }
+
+    return cwdFolder;
+}
+
+function setSizes(folder: Folder): number {
+    const entryNames = Object.keys(folder.contents);
+    let folderSize = 0;
+    for (const name of entryNames) {
+        const entry = folder.contents[name];
+        if (entry.type === 'file') {
+            folderSize += entry.size;
+        } else {
+            // must be directory
+            folderSize += setSizes(entry.content);
+        }
+    }
+
+    folder.size = folderSize;
+
+    return folderSize;
+}
+
+function getFolderSizesAtMost(root: Folder, limit: number) {    
+    const folders: Array<Folder> = [];
+    const folderSize = root.size || 0;
+    if (folderSize < limit) {
+        folders.push(root);
+    }
+
+    for (const entry of Object.values(root.contents)) {
+        if (entry.type === 'directory') {
+            const subFolders = getFolderSizesAtMost(entry.content, limit);
+            folders.push(...subFolders);
+        }
+    }
+
+    return folders;
 }
 
 export default function() {
-    const buffers = input.split('\n');
-    const results: {[buffer: string]: number} = {};
-    
-    for (const buffer of buffers) {
-        results[buffer] = detectStart(buffer);
+    const context = {
+        cwd: [],
+        root: {
+            name: '',
+            contents: {}
+        }
+    };
+
+    const consoleOutput = input.split('\n');
+    let consoleLine = 0;
+    let output: Array<string> = [];
+    let lastCommand: CommandType | void = undefined;
+
+    while (consoleLine < consoleOutput.length) {
+        const currentLine = consoleOutput[consoleLine];
+        if (currentLine.startsWith('$')) {
+            if (lastCommand === 'ls') {
+                // end of output from ls command
+                processLs({ output, context });
+                output = [];
+            }
+
+            const [type, maybeArg] = currentLine.slice(2).split(' ') as [CommandType, string];
+            lastCommand = type;
+
+            if (type === 'cd') {
+                processCd({ cdLocation: maybeArg, context });
+            }
+        } else {
+            output.push(currentLine);
+        }
+        consoleLine += 1;
     }
-    return results;
+
+    // do any final processing
+    if (lastCommand === 'ls') {
+        // end of output from ls command
+        processLs({ output, context });
+        output = [];
+    }
+
+    // compute sizes
+    setSizes(context.root);
+
+    const eligibleFolders = getFolderSizesAtMost(context.root, 100000);
+    const sum = eligibleFolders.reduce((sum, folder) => {
+        sum += folder?.size ?? 0;
+        return sum;
+    }, 0);
+
+    return { sum, root: context.root, eligibleFolders };
 }
