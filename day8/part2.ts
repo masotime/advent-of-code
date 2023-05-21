@@ -1,156 +1,169 @@
 import input from './input';
 
-type Path = Array<string>;
-type Entry = { type: 'file', size: number } | { type: 'directory', content: Folder };
-type Folder = {
-    name: string,
-    contents: {
-        [name: string]: Entry
-    },
-    size?: number
-};
-type Context = {
-    cwd: Path,
-    root: Folder
-};
-type CommandType = 'ls' | 'cd';
+type Map = Array<Array<number>>;
+type Direction = 'up' | 'down' | 'left' | 'right';
 
-function processCd({ cdLocation, context }: { cdLocation: string, context: Context }): Path {
-    const cwd = context.cwd;
-
-    switch (cdLocation) {
-        case '/':
-            cwd.length = 0;
-            break;
-        case '..':
-            cwd.pop();
-            break;
-        default:
-            cwd.push(cdLocation); 
-    }
-
-    return cwd;
+function convertInputToMap(input: string): Map {
+    return input.split('\n').map(line => line.split('').map(num => parseInt(num, 10)));
 }
 
-function navigateToPath({ root, cwd }: Context): Folder {
-    let currentFolder: Folder = root;
-    let currentFolderPath = '/';
-    for (const folder of cwd) {
-        const nextNavEntry = currentFolder.contents[folder];
-        if (nextNavEntry.type === 'directory') {
-            currentFolder = nextNavEntry.content;
-            currentFolderPath += `${folder}/`;
+/* The "score" map is also calculated in 4 sweeps + 1 sweep to get the actual scores.
+   The first 4 sweeps calculate the "tree visibility" from each direction, then the final
+   sweep multiplies the values across all of the previous 4 sweeps into a final grid.
+
+   For example, given
+
+   30373
+   25512
+   65332
+   33549
+   35390
+
+   Sweep 1: (left to right - shows sweep map values)
+
+   00000      0|0000      01|000      012|00      0123|0      01231|      
+   00000      0|0000      01|000      011|00      0111|0      01112|      
+   00000 ===> 0|0000 ===> 01|000 ===> 011|00 ===> 0111|0 ===> 01111|
+   00000      0|0000      01|000      012|00      0121|0      01214|      
+   00000      0|0000      01|000      011|00      0113|0      01131|      
+
+   basically while sweeping in one direction
+   1. create a new sweep map M initialized to all 0
+   2. consider the sweep map value on the left S (or -1 if there is no such value)
+   3. consider the tree height on the left P (or 0 if there is no such value)
+   4. consider the height of the current tree C (for current)
+   5a. if C <= P, then it's simply set to 1.   
+   5b. if C > P, then we add the sweep value S, but we must keep searching.
+     i. check the tree at steps (P - sweep value) away, P2 with value S2
+       C > P2? Continue to add S2 and repeat the process
+     ii. otherwise add 1 and stop.  
+
+   NOTE: Avoid || operator - 0 is "falsy", so 0 || -1 = -1, even though you want 0.
+*/
+
+type Coordinate = {
+    row: number,
+    col: number
+}
+
+type Navigator = (start: Coordinate, steps: number) => Coordinate;
+
+function makeNavigator(dir: Direction): Navigator {
+    return ({ row, col }: Coordinate, steps: number) => {
+        switch (dir) {
+            case 'up':
+                return { row: (row - steps), col };
+            case 'down':
+                return { row: (row + steps), col };
+            case 'left':
+                return { row, col: (col - steps) };
+            case 'right':            
+                return { row, col: (col + steps) }
+        }
+    }
+}
+
+// creates a calulator with a given context (inputMap, sweepMap and direction)
+function makeCalculator(inputMap: Map, sweepMap: Map, dir: Direction, viewHeight: number) {
+    const navigate = makeNavigator(dir);
+
+    return function calculate(current: Coordinate, steps: number): number {
+        const { row, col } = navigate(current, steps);
+        // console.log(`I am now at [${current.row}, ${current.col}] and looking from the ${dir}. My height is ${viewHeight} and I plan to check the tree at [${row}, ${col}]`);
+        const nextTreeHeight = (inputMap[row] ?? [])[col];
+        const nextTreeVisibility = (sweepMap[row] ?? [])[col];
+
+        if (nextTreeHeight === undefined) {
+            // console.log(`There's no tree at [${row}, ${col}] so I stop and give up.`);
+            return 0;
+        } else if (viewHeight <= nextTreeHeight) {
+            // console.log(`I'm not taller than the tree at [${row}, ${col}] which is ${nextTreeHeight} tall so I stop after adding the steps ${steps} to get to this tree.`);
+            return steps;
+        } else if (nextTreeVisibility === 0) {
+            // console.log('The next tree must be at the edge of the map since it has 0 visibility, so I stop');
+            return steps;
         } else {
-            throw new Error(`Invalid path /${cwd.join('/')}, could not navigate to ${folder} while in ${currentFolderPath}`);
+            // console.log(`I'm taller than the tree at [${row}, ${col}] which is ${nextTreeHeight} tall so count the steps (${steps}) to it and check the tree it can't see beyond (${nextTreeVisibility}) away.`);
+            return steps + calculate({ row, col }, nextTreeVisibility);
+        }
+    }
+}
+
+function createMap(inputMap: Map, fillFunction: () => any) {
+    const height = inputMap.length;
+    const width = inputMap[0].length;
+
+    return (new Array(height).fill(null)).map(elem => new Array(width).fill(fillFunction()));
+}
+
+function constructScoreMap(inputMap: Map): Map {
+    const height = inputMap.length;
+    const width = inputMap[0].length;
+    const maps: { [K in Direction]: Map } = {
+        left: createMap(inputMap, () => 0),
+        right: createMap(inputMap, () => 0),
+        down: createMap(inputMap, () => 0),
+        up: createMap(inputMap, () => 0)
+    }
+    const dirs: Array<Direction> = ['up', 'down', 'left', 'right'];
+
+   // scan left to right
+    for (let col = 0; col < width; col += 1) {
+        for (let row = 0; row < height; row += 1) { // row scan order doesn't really matter here
+            const viewHeight = inputMap[row][col];
+            const calc = makeCalculator(inputMap, maps['left'], 'left', viewHeight);
+            maps['left'][row][col] = calc({ row, col }, 1);
         }
     }
 
-    return currentFolder;
-}
+   // scan right to left
+   for (let col = width - 1; col >= 0; col -= 1) {
+       for (let row = 0; row < height; row += 1) { // row scan order doesn't really matter here
+           const viewHeight = inputMap[row][col];
+           const calc = makeCalculator(inputMap, maps['right'], 'right', viewHeight);
+           maps['right'][row][col] = calc({ row, col }, 1);
+       }
+   }
 
-function processLs({ output, context } : { output: Array<string>, context: Context }): Folder {
-    const cwdFolder = navigateToPath(context);
-    for (const line of output) {
-        const [typeOrLength, name] = line.split(' ') as [string, string];
-        if (typeOrLength === 'dir') {
-            cwdFolder.contents[name] = { type: 'directory', content: { name, contents: {} }};
-        } else {
-            const size = parseInt(typeOrLength, 10);
-            cwdFolder.contents[name] = { type: 'file', size };
-        };
+   // scan top to bottom
+   for (let row = 0; row < height; row += 1) {
+       for (let col = 0; col < width; col += 1) { // col scan order doesn't really matter here
+           const viewHeight = inputMap[row][col];
+           const calc = makeCalculator(inputMap, maps['up'], 'up', viewHeight);
+           maps['up'][row][col] = calc({ row, col }, 1);
+       }
+   }
+
+   // scan from bottom to top
+    for (let row = height - 1; row >= 0; row -= 1) {
+        for (let col = 0; col < width; col += 1) { // col scan order doesn't really matter here
+            const viewHeight = inputMap[row][col];
+            const calc = makeCalculator(inputMap, maps['down'], 'down', viewHeight);
+            maps['down'][row][col] = calc({ row, col }, 1);
+        }
     }
+    
+    console.log(maps);
 
-    return cwdFolder;
-}
-
-function setSizes(folder: Folder): number {
-    const entryNames = Object.keys(folder.contents);
-    let folderSize = 0;
-    for (const name of entryNames) {
-        const entry = folder.contents[name];
-        if (entry.type === 'file') {
-            folderSize += entry.size;
-        } else {
-            // must be directory
-            folderSize += setSizes(entry.content);
+    // we now have all 4 maps, so we compute the final value
+    const scoreMap = createMap(inputMap, () => 1);
+    for (let col = 0; col < width; col += 1) {
+        for (let row = 0; row < height; row += 1) { // row scan order doesn't really matter here
+            scoreMap[row][col] = dirs.reduce((score, dir) => {
+                return score * maps[dir][row][col];
+            }, 1)
         }
     }
 
-    folder.size = folderSize;
-
-    return folderSize;
+    return scoreMap;
 }
 
-function getFolderSizesAtLeast(root: Folder, limit: number) {    
-    const folders: Array<Folder> = [];
-    const folderSize = root.size || 0;
-    if (folderSize >= limit) {
-        folders.push(root);
-    }
-
-    for (const entry of Object.values(root.contents)) {
-        if (entry.type === 'directory') {
-            const subFolders = getFolderSizesAtLeast(entry.content, limit);
-            folders.push(...subFolders);
-        }
-    }
-
-    return folders;
+function findLargest(scoreMap: Map) {
+    return Math.max(...scoreMap.flat());
 }
 
 export default function() {
-    const context = {
-        cwd: [],
-        root: {
-            name: '/',
-            contents: {},
-            size: 0
-        }
-    };
-
-    const consoleOutput = input.split('\n');
-    let consoleLine = 0;
-    let output: Array<string> = [];
-    let lastCommand: CommandType | void = undefined;
-
-    while (consoleLine < consoleOutput.length) {
-        const currentLine = consoleOutput[consoleLine];
-        if (currentLine.startsWith('$')) {
-            if (lastCommand === 'ls') {
-                // end of output from ls command
-                processLs({ output, context });
-                output = [];
-            }
-
-            const [type, maybeArg] = currentLine.slice(2).split(' ') as [CommandType, string];
-            lastCommand = type;
-
-            if (type === 'cd') {
-                processCd({ cdLocation: maybeArg, context });
-            }
-        } else {
-            output.push(currentLine);
-        }
-        consoleLine += 1;
-    }
-
-    // do any final processing
-    if (lastCommand === 'ls') {
-        // end of output from ls command
-        processLs({ output, context });
-        output = [];
-    }
-
-    // compute sizes
-    setSizes(context.root);
-
-    const TOTAL_SPACE = 70000000;
-    const REQUIRED_SPACE = 30000000;
-    const availableSpace = TOTAL_SPACE - context.root.size;
-    const minimumToDelete = REQUIRED_SPACE - availableSpace;
-
-    const eligibleFolders = getFolderSizesAtLeast(context.root, minimumToDelete);
-    eligibleFolders.sort((a,b) => (a.size || 0) - (b.size || 0));
-
-    return { availableSpace, minimumToDelete, eligibleFolders };
+    const inputMap = convertInputToMap(input);
+    const scoreMap = constructScoreMap(inputMap);
+    return findLargest(scoreMap);
 }
