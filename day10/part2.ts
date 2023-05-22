@@ -68,12 +68,11 @@ function parseInput(input: string): { cycleMap: CycleMap, instructions: Instruct
                 // but it's useful for debugging
                 crtMap: formatCrtMap(crtMap.join(''))
             }
-            console.log(cycleMap[cycle].crtMap);
+            // console.log(cycleMap[cycle].crtMap);
         }
 
         // actually have the instruction take effect for this cycle
         X = instructionEffect[type](X, arg);
-        // cycleMap[cycle - 1].X = X;
     }
 
     return {
@@ -83,16 +82,8 @@ function parseInput(input: string): { cycleMap: CycleMap, instructions: Instruct
 
 }
 
-function getSignalStrengths(cycles: Array<number>, cycleMap: CycleMap): number {
-    let sum = 0;
-    for (const cycle of cycles) {
-        sum += cycleMap[cycle].X * cycle;
-    }
-    return sum;
-}
-
 export default function() {
-    const { cycleMap, instructions } = parseInput(input);
-    const signalStrengthSum = getSignalStrengths([20, 60, 100, 140, 180, 220], cycleMap);
-    return { };
+    const { cycleMap } = parseInput(input);
+    const lastCycle = Math.max(...Object.keys(cycleMap).map(_ => parseInt(_, 10)));
+    return `\n${cycleMap[lastCycle].crtMap}`;
 }
