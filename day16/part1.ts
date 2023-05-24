@@ -1,4 +1,4 @@
-import input from './sample';
+import input from './input';
 
 type Valve = {
     name: string,
@@ -213,7 +213,7 @@ function solve(volcano: Volcano, distances: Distances): Array<Path> {
             continue;
         }
 
-        for (const valve of path.unvisited) {            
+        for (const valve of path.unvisited) {
             // simulate "teleporting" to that valve and opening it
             const timeElapsed = distances[lastPosition.id][valve] + 1 // +1 to open it
             const timeRemaining = lastPosition.timeRemaining - timeElapsed;
@@ -222,6 +222,12 @@ function solve(volcano: Volcano, distances: Distances): Array<Path> {
             const unvisited = [...path.unvisited];
 
             unvisited.splice(unvisited.indexOf(valve), 1);
+
+            // HEURISTIC: do not bother considering paths where the distance + 1 is >= time remaining
+            const betterUnvisited = unvisited.filter((nextValve) => {
+                const nextDistance = distances[valve][nextValve] + 1;
+                return nextDistance < timeRemaining;
+            })
 
             const nextStep = {
                 id: valve,
@@ -233,11 +239,11 @@ function solve(volcano: Volcano, distances: Distances): Array<Path> {
                 steps: [...path.steps, nextStep],
 
                 totalPressureReleased,
-                unvisited
+                unvisited: betterUnvisited
             });
         }
 
-        // (searchSpace.length % 1000 <= 100) && console.log(`Search Space is now of size ${searchSpace.length}`);
+        (searchSpace.length % 1000 <= 100) && console.log(`Search Space is now of size ${searchSpace.length}`);
     }
 
     return solutions;
