@@ -1,4 +1,4 @@
-import input from './input';
+import input from './sample';
 
 type Valve = {
     name: string,
@@ -119,6 +119,17 @@ type Path = {
 // PT 2: this is now 30-4 = 26 per part 2 description
 const INITIAL_TIME_REMAINING = 30;
 
+function closePath(path: Path): Path {
+    const { flowRate, timeRemaining } = path.yourSteps[path.yourSteps.length - 1];
+    path.finalTotal = path.totalPressureReleased + flowRate * timeRemaining;
+
+    // PT 2: include the elephant in the calculations
+    const { flowRate: elephantFlowRate, timeRemaining: elephantTimeRemaining } = path.elephantSteps[path.elephantSteps.length - 1];
+    path.finalTotal += elephantFlowRate * elephantTimeRemaining;
+
+    return path;
+}
+
 // Brute force search
 function solve(volcano: Volcano, distances: Distances): Array<Path> {
 
@@ -136,18 +147,7 @@ function solve(volcano: Volcano, distances: Distances): Array<Path> {
     }
 
     const searchSpace: Array<Path> = [initialPath];
-    const solutions: Array<Path> = [];
-
-    function closePath(path: Path): Path {
-        const { flowRate, timeRemaining } = path.yourSteps[path.yourSteps.length - 1];
-        path.finalTotal = path.totalPressureReleased + flowRate * timeRemaining;
-
-        // PT 2: include the elephant in the calculations
-        const { flowRate: elephantFlowRate, timeRemaining: elephantTimeRemaining } = path.elephantSteps[path.elephantSteps.length - 1];
-        path.finalTotal += elephantFlowRate * elephantTimeRemaining;
-
-        return path;
-    }
+    let solution: Path = initialPath;
 
     while (searchSpace.length > 0) {
         const path = searchSpace.shift() as Path; // dequeue
@@ -204,14 +204,18 @@ function solve(volcano: Volcano, distances: Distances): Array<Path> {
 
         if (!candidatePathsGenerated) {
             // we are also at a solution in such a state
-            solutions.push(closePath(path));
+            const candidateSolution = closePath(path);
+
+            if ((candidateSolution.finalTotal ?? 0) > (solution.finalTotal ?? 0)) {
+                solution = candidateSolution;
+            }
         }
 
 
         (searchSpace.length % 1000 === 0) && console.log(`Search Space is now of size ${searchSpace.length}`);
     }
 
-    return solutions;
+    return [solution];
 }
 
 export default function() {
