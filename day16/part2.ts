@@ -153,11 +153,6 @@ function solve(volcano: Volcano, distances: Distances): Array<Path> {
         const path = searchSpace.shift() as Path; // dequeue
         const yourLastPosition = path.yourSteps[path.yourSteps.length - 1];
 
-        if (path.unvisited.length === 0) {
-            solutions.push(closePath(path));
-            continue;
-        }
-
         let candidatePathsGenerated = false;
 
         for (let u1 = 0; u1 < path.unvisited.length; u1 += 1) {
