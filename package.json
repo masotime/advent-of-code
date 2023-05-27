@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "start": "esrun index.ts"
+    "start": "esrun index.ts",
+    "maxheap": "esrun --node-max-old-space-size=32768 index.ts"
   },
   "devDependencies": {
     "@digitak/esrun": "^3.2.24",

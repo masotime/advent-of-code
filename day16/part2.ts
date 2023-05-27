@@ -1,4 +1,4 @@
-import input from './sample';
+import input from './input';
 
 type Valve = {
     name: string,
@@ -110,7 +110,7 @@ type Path = {
 }
 
 // PT 2: this is now 30-4 = 26 per part 2 description
-const INITIAL_TIME_REMAINING = 30;
+const INITIAL_TIME_REMAINING = 26;
 
 function closePath(path: Path): Path {
     const { flowRate, timeRemaining } = path.yourSteps[path.yourSteps.length - 1];
@@ -128,7 +128,6 @@ function solve(volcano: Volcano, distances: Distances): Array<Path> {
 
     // only consider valves that can be opened
     const viableOptions: Array<Valve> = Object.values(volcano.valves).filter(valve => valve.flowRate !== 0);
-    console.log(`Maximum search space size = ${viableOptions.length}!`);
 
     // BFS like sweep, potentially improvable by pruning
     const initialPath: Path = {
@@ -150,14 +149,6 @@ function solve(volcano: Volcano, distances: Distances): Array<Path> {
         let candidatePathsGenerated = false;
 
         for (let u1 = 0; u1 < path.unvisited.length; u1 += 1) {
-            // let candidatePath: Path = {
-            //     yourSteps: [...path.yourSteps],
-            //     elephantSteps: [...path.elephantSteps],
-
-            //     totalPressureReleased: path.totalPressureReleased,
-            //     unvisited: [...path.unvisited]
-            // };
-
             // track step permutations
             let yourNextStep: Step | void = undefined;            
 
@@ -170,20 +161,11 @@ function solve(volcano: Volcano, distances: Distances): Array<Path> {
                 const yourNextTimeRemaining = yourLastPosition.timeRemaining - yourTimeElapsed;
                 const yourNextFlowRate = yourLastPosition.flowRate + volcano.valves[yourNextValve].flowRate;
 
-                // remove your valve from consideration of the elephant's choices
-                // valvesChosen.push(yourNextValve);
-
                 yourNextStep = {
                     id: yourNextValve,
                     timeRemaining: yourNextTimeRemaining,
                     flowRate: yourNextFlowRate
                 };
-
-                // TODO: Since the choice order doesn't matter - i.e. you choosing or the elephant choosing first
-                // it should be possible to slice and take all path after the index u1 instead of just removing u1.
-                // candidatePath.unvisited.splice(candidatePath.unvisited.indexOf(yourNextValve), 1);
-                // candidatePath.yourSteps.push(nextStep);
-                // candidatePath.totalPressureReleased += yourLastPosition.flowRate * yourTimeElapsed;
             }
 
             // If you have a next step, we push a candidate path with you moving but not the elephant
@@ -198,63 +180,66 @@ function solve(volcano: Volcano, distances: Distances): Array<Path> {
 
                 candidatePath.yourSteps.push(yourNextStep);
                 candidatePath.totalPressureReleased += yourLastPosition.flowRate * (yourLastPosition.timeRemaining - yourNextStep.timeRemaining);
-                candidatePath.unvisited = candidatePath.unvisited.splice(candidatePath.unvisited.indexOf(yourNextStep.id), 1);
+                candidatePath.unvisited.splice(candidatePath.unvisited.indexOf(yourNextStep.id), 1);
 
                 searchSpace.push(candidatePath);
                 candidatePathsGenerated = true;
             }
 
             // START: Code for the elephant - inner loop on the remaining unvisited valves (in case you picked one earlier)
-            const elephantCandidates = [...path.unvisited];
-            if (yourNextStep) {
-                elephantCandidates.splice(elephantCandidates.indexOf(yourNextStep.id), 1);
-            }
-            
-            for (let u2 = 0; u2 < elephantCandidates.length; u2 += 1) {
-                // COPYPASTA REGION
-                // simulate elephant "teleporting" to that valve and opening it
-                const elephantNextValve = elephantCandidates[u2];
-                const elephantTimeElapsed = distances[elephantLastPosition.id][elephantNextValve] + 1 // +1 to open it
+            const elephantCodeEnabled = true;
+            if (elephantCodeEnabled) {                
+                const elephantCandidates = [...path.unvisited];
+                if (yourNextStep) {
+                    elephantCandidates.splice(elephantCandidates.indexOf(yourNextStep.id), 1);
+                }
+                
+                for (let u2 = 0; u2 < elephantCandidates.length; u2 += 1) {
+                    // COPYPASTA REGION
+                    // simulate elephant "teleporting" to that valve and opening it
+                    const elephantNextValve = elephantCandidates[u2];
+                    const elephantTimeElapsed = distances[elephantLastPosition.id][elephantNextValve] + 1 // +1 to open it
 
-                // only continue consideration if the time remaining exceeds the time elapsed
-                if (elephantLastPosition.timeRemaining > elephantTimeElapsed) {
-                    // we generate a new path for each of the elephant's candidates
-                    const elephantNextTimeRemaining = elephantLastPosition.timeRemaining - elephantTimeElapsed;
-                    const elephantNextFlowRate = elephantLastPosition.flowRate + volcano.valves[elephantNextValve].flowRate;
+                    // only continue consideration if the time remaining exceeds the time elapsed
+                    if (elephantLastPosition.timeRemaining > elephantTimeElapsed) {
+                        // we generate a new path for each of the elephant's candidates
+                        const elephantNextTimeRemaining = elephantLastPosition.timeRemaining - elephantTimeElapsed;
+                        const elephantNextFlowRate = elephantLastPosition.flowRate + volcano.valves[elephantNextValve].flowRate;
 
-                    // remove elephant's valve from consideration of unvisited paths
-                    // TODO: Since the choice order doesn't matter - i.e. you choosing or the elephant choosing first
-                    // it should be possible to slice and take all path after the index u1 instead of just removing u1.
-                    // candidatePath.unvisited.splice(candidatePath.unvisited.indexOf(elephantNextValve), 1);
+                        // remove elephant's valve from consideration of unvisited paths
+                        // TODO: Since the choice order doesn't matter - i.e. you choosing or the elephant choosing first
+                        // it should be possible to slice and take all path after the index u1 instead of just removing u1.
+                        // candidatePath.unvisited.splice(candidatePath.unvisited.indexOf(elephantNextValve), 1);
 
-                    const elephantNextStep = {
-                        id: elephantNextValve,
-                        timeRemaining: elephantNextTimeRemaining,
-                        flowRate: elephantNextFlowRate
-                    };
+                        const elephantNextStep = {
+                            id: elephantNextValve,
+                            timeRemaining: elephantNextTimeRemaining,
+                            flowRate: elephantNextFlowRate
+                        };
 
-                    // generate a candidate path
-                    const candidatePath: Path = {
-                        yourSteps: [...path.yourSteps],
-                        elephantSteps: [...path.elephantSteps],
+                        // generate a candidate path
+                        const candidatePath: Path = {
+                            yourSteps: [...path.yourSteps],
+                            elephantSteps: [...path.elephantSteps],
 
-                        totalPressureReleased: path.totalPressureReleased,
-                        unvisited: [...path.unvisited]
+                            totalPressureReleased: path.totalPressureReleased,
+                            unvisited: [...path.unvisited]
+                        }
+
+                        // update each field accordingly with all the accumulated values
+                        if (yourNextStep) {
+                            candidatePath.yourSteps.push(yourNextStep);
+                            candidatePath.totalPressureReleased += yourLastPosition.flowRate * (yourLastPosition.timeRemaining - yourNextStep.timeRemaining);
+                            candidatePath.unvisited.splice(candidatePath.unvisited.indexOf(yourNextStep.id), 1);
+                        }
+
+                        candidatePath.elephantSteps.push(elephantNextStep);
+                        candidatePath.totalPressureReleased += elephantLastPosition.flowRate * (elephantLastPosition.timeRemaining - elephantNextStep.timeRemaining);
+                        candidatePath.unvisited.splice(candidatePath.unvisited.indexOf(elephantNextStep.id), 1);
+
+                        searchSpace.push(candidatePath);
+                        candidatePathsGenerated = true;
                     }
-
-                    // update each field accordingly with all the accumulated values
-                    if (yourNextStep) {
-                        candidatePath.yourSteps.push(yourNextStep);
-                        candidatePath.totalPressureReleased += yourLastPosition.flowRate * (yourLastPosition.timeRemaining - yourNextStep.timeRemaining);
-                        candidatePath.unvisited = candidatePath.unvisited.splice(candidatePath.unvisited.indexOf(yourNextStep.id), 1);
-                    }
-
-                    candidatePath.elephantSteps.push(elephantNextStep);
-                    candidatePath.totalPressureReleased += elephantLastPosition.flowRate * (elephantLastPosition.timeRemaining - elephantNextStep.timeRemaining);
-                    candidatePath.unvisited = candidatePath.unvisited.splice(candidatePath.unvisited.indexOf(elephantNextStep.id), 1);
-
-                    searchSpace.push(candidatePath);
-                    candidatePathsGenerated = true;
                 }
             }
 
