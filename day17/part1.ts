@@ -271,7 +271,5 @@ export default function() {
         simulateFall(chamber, worldState, shape);
     }
 
-    console.log({ height: chamber.floorRow - chamber.emptyRow - 1 });
-
-    return { chamber, worldState };
+    return { height: chamber.floorRow - chamber.emptyRow - 1 };
 }
