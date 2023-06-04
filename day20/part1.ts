@@ -76,18 +76,16 @@ function simulatePass(list: NumberList): NumberList {
         const nodeNext = mod(nodeCurrent + node.value);
 
         if (nodeNext > nodeCurrent) {
-            // if the direction is negative, then there is a "wraparound" effect
-            // and the modulo position is inaccurate (as an array index). We have to
-            // decrease it by 1
 
-            // shuffle everything up to and including the destination node backwards
+            // shuffle everything after the node up to and including the destination node backwards
             for (let i = nodeCurrent + 1; i <= nodeNext; i += 1) {
                 const sNode = orderedList[i];
                 sNode.position -= 1;
                 orderedList[sNode.position] = sNode;
             }
         } else {
-            // shuffle everything strictly in between forwards. count backwards to avoid collision
+            // shuffle everything behind the current node up to its destination forwards
+            // NOTE: Count down, not upwards, or you will overwrite the node you want to shuffle next
             for (let i = nodeCurrent - 1; i >= nodeNext; i -= 1) {
                 const sNode = orderedList[i];
                 sNode.position += 1;
