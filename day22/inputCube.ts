@@ -89,8 +89,7 @@ function regionTransformer(from: RegionCoord, to: Region, direction: Direction):
     // possible for both the direction and the row/col values to swap, we need to handle it for every
     // case
     let newDirection = direction;
-    let newCol = from.coord.col;
-    let newRow = from.coord.col;
+    let newRow, newCol;
     let maxIdx = from.size - 1;
 
     const invert = (coordIdx: number) => maxIdx - coordIdx;
@@ -211,6 +210,10 @@ function regionTransformer(from: RegionCoord, to: Region, direction: Direction):
                 newCol = from.coord.row;
             }
             break;
+    }
+
+    if (newRow === undefined || newCol === undefined) {
+        throw new Error(`Could not find a new row or col for region from ${from.region} to ${to}`);
     }
 
     return {
