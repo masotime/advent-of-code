@@ -1,4 +1,4 @@
-import input from './sample';
+import input from './input';
 
 type Coordinate = {
     row: number,
@@ -236,12 +236,11 @@ function generatePossibilities(position: Coordinate, world: World): Array<ValidM
     const candidates: Array<ValidMove> = [];
 
     // do the usual checks
-    const up = { row: row - 1, col };
-    const upLetter = getLetter(world, up);    
-
+    // now I have to check down as well....
     const down = { row: row + 1, col };
-    const downLetter = getLetter(world, down);    
-    if (downLetter !== '#' && !isBlizzard(downLetter)) {
+    const downLetter = getLetter(world, down);
+    const downWithinGrid = down.row >= 0 && down.row < world.grid.length;
+    if (downWithinGrid && downLetter !== '#' && !isBlizzard(downLetter)) {
         candidates.push({
             move: 'v',
             newPosition: down
@@ -267,8 +266,11 @@ function generatePossibilities(position: Coordinate, world: World): Array<ValidM
     }
 
     // the row >= 0 is just because you can start at the entrance
-    // with no walls above you 🙄
-    if (up.row >= 0 && upLetter !== '#' && !isBlizzard(upLetter)) {
+    // with no walls above you 🙄.
+    const up = { row: row - 1, col };
+    const upLetter = getLetter(world, up);    
+    const upWithinGrid = up.row >= 0 && up.row < world.grid.length;
+    if (upWithinGrid && upLetter !== '#' && !isBlizzard(upLetter)) {
         candidates.push({
             move: '^',
             newPosition: up
@@ -307,9 +309,10 @@ function visualizeWorld(world: World, position: Coordinate): string {
     return render;
 }
 
-function visualizeCandidate(worldStates: { [time: number]: World }, path: Path): string {
+function visualizeCandidate(worldStates: { [time: number]: World }, path: Path, expeditionState: ExpeditionState): string {
     const renders: Array<string> = [];    
-    let position: Coordinate = { ...worldStates[0].entrance };
+    let position: Coordinate = { ...expeditionState.start };
+    renders.push(`Candidate of length ${path.moves.length}, ${path.moves.join('')}`);
     for (let t = 0; t <= path.moves.length; t += 1) {
         const world = worldStates[t];
         const render = visualizeWorld(world, position);
@@ -329,12 +332,7 @@ function visualizeCandidate(worldStates: { [time: number]: World }, path: Path):
     return renders.join('\n');
 }
 
-function distanceFromExit(current: Coordinate, exit: Coordinate): number {
-    // use manhattan distance
-    return Math.abs(current.row - exit.row) + Math.abs(current.col - exit.col);
-}
-
-function sortAndPrune(candidates: Array<Path>, exit: Coordinate): Array<Path> {
+function sortAndPrune(candidates: Array<Path>): Array<Path> {
 
     // dedupe - if you have the same position and time, just remove the path
     candidates.sort((path1, path2) => {
@@ -371,12 +369,21 @@ function sortAndPrune(candidates: Array<Path>, exit: Coordinate): Array<Path> {
     return candidates;
 }
 
+type ExpeditionState = {
+    start: Coordinate,
+    target: Coordinate,
+}
 
-function solve(worldStates: { [time: number]: World}): Path {
-    const { entrance, exit } = worldStates[0];
+function distanceFromExit(current: Coordinate, exit: Coordinate): number {
+    // use manhattan distance
+    return Math.abs(current.row - exit.row) + Math.abs(current.col - exit.col);
+}
+
+function solve(worldStates: { [time: number]: World}, expeditionState: ExpeditionState): Path {
+    const exit = expeditionState.target;
     const initialPath = {
         moves: [],
-        currentPosition: { ...entrance } 
+        currentPosition: { ...expeditionState.start } 
     } 
     const candidates: Array<Path> = [initialPath]
 
@@ -403,14 +410,14 @@ function solve(worldStates: { [time: number]: World}): Path {
 
             // end condition - solution found
             if (newPosition.row === exit.row && newPosition.col === exit.col) {
-                console.log(`Found a solution of length ${newCandidate.moves.length}`);
+                // console.log(`Found a solution of length ${newCandidate.moves.length}`);
                 return newCandidate;
             }
 
             candidates.push(newCandidate);
         }
 
-        sortAndPrune(candidates, exit);
+        sortAndPrune(candidates);
         // console.log('======================= CYCLE DIVIDER ================');
         // candidates.forEach((candidate, idx) => {
         //     console.log('   CANDIDATE', idx, {
@@ -420,17 +427,17 @@ function solve(worldStates: { [time: number]: World}): Path {
         //     // console.log(visualizeCandidate(worldStates, candidate));
         // })
         
-        if (candidates.length % 100 === 0 && candidates.length > 0) {
-            console.log(`Candidate space is ${candidates.length}, time ${time}`);            
-            console.log('   CANDIDATE', 0, {
-                time: candidates[0].moves.length,
-                score: distanceFromExit(candidates[0].currentPosition, exit)
-            });
-            console.log('   CANDIDATE', candidates.length - 1, {
-                time: candidates[candidates.length - 1].moves.length,
-                score: distanceFromExit(candidates[candidates.length - 1].currentPosition, exit)
-            });
-        }
+        // if (candidates.length % 100 === 0 && candidates.length > 0) {
+        //     console.log(`Candidate space is ${candidates.length}, time ${time}`);            
+        //     console.log('   CANDIDATE', 0, {
+        //         time: candidates[0].moves.length,
+        //         score: distanceFromExit(candidates[0].currentPosition, exit)
+        //     });
+        //     console.log('   CANDIDATE', candidates.length - 1, {
+        //         time: candidates[candidates.length - 1].moves.length,
+        //         score: distanceFromExit(candidates[candidates.length - 1].currentPosition, exit)
+        //     });
+        // }
     }
 
     throw new Error('Ran out of candidates and could not find a path!');
@@ -458,8 +465,44 @@ export default function() {
     console.log(simulationsGenerated, 'simulations took', secondsTaken.toPrecision(20),'seconds');
     debugHeap();
 
-    const solutionPath = solve(worldSimulations);
-    console.log(visualizeCandidate(worldSimulations, solutionPath));
+    const movesTaken = {
+        there: 0,
+        back: 0,
+        thereAgain: 0
+    };
 
-    return solutionPath
+    // first we do the usual process
+    console.log('======= THERE =========');
+    const there: ExpeditionState = {
+        start: { ...world.entrance },
+        target: { ...world.exit },
+    };
+    const thereSolutionPath = solve(worldSimulations, there);
+    movesTaken.there = thereSolutionPath.moves.length;    
+    console.log(visualizeCandidate(worldSimulations, thereSolutionPath, there));
+
+    // then we slice the worldSimulations accordingly to match the new starting state
+    console.log('======= BACK =========');
+    const backWorldSimulations = worldSimulations.slice(movesTaken.there);
+
+    const back: ExpeditionState = {
+        start: { ...world.exit},
+        target: { ...world.entrance },
+    };
+    const backSolutionPath = solve(backWorldSimulations, back);
+    movesTaken.back = backSolutionPath.moves.length;    
+    console.log(visualizeCandidate(backWorldSimulations, backSolutionPath, back));
+
+    // we slice the worldSimulations again
+    console.log('======= THERE AGAIN =========');
+    const thereAgainWorldSimulations = worldSimulations.slice(movesTaken.there + movesTaken.back);
+
+    // NOTE: use the same expedition state at the beginning
+    const thereAgainSolutionPath = solve(thereAgainWorldSimulations, there);
+    movesTaken.thereAgain = thereAgainSolutionPath.moves.length;
+    console.log(visualizeCandidate(thereAgainWorldSimulations, thereAgainSolutionPath, there));
+
+    console.log({ movesTaken });
+
+    return movesTaken.there + movesTaken.back + movesTaken.thereAgain;
 }
