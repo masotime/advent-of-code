@@ -196,29 +196,6 @@ function simulateNextMinute(world: World): World {
     return nextWorld;
 }
 
-// this is just used for debugging
-function validateSimulations(initialWorld: World) {
-    console.log('=== Initial World ===');
-    console.log(visualize(initialWorld));
-    console.log('\n');
-
-    const worldSimulations = [initialWorld];
-
-    for (let t = 1; t <= 18; t += 1) {
-        const lastWorld = worldSimulations[t-1];
-        const nextWorld = simulateNextMinute(lastWorld);
-        worldSimulations.push(nextWorld);
-        console.log(`=== World at minute ${t} ===`);
-        console.log(visualize(nextWorld));
-        console.log('\n');
-    }
-}
-
-function debugHeap() {
-    const used = process.memoryUsage().heapUsed / 1024 / 1024;
-    console.log(`Heap used ${Math.round(used * 100) / 100} MB`);
-}
-
 type Move = Direction | 'w'; // 'w' for wait
 
 type Path = {
@@ -450,20 +427,18 @@ export default function() {
     console.log('\n');
 
     const worldSimulations = [world];
-    debugHeap();
 
     console.log('Generating simulations');
     const start = Date.now();
     const simulationsGenerated = MAX_SIMULATIONS;
-    // generate simulate the crap out of the world
+    // simulate the crap out of the world
     for (let t = 1; t <= simulationsGenerated; t += 1) {
         const lastWorld = worldSimulations[t-1];
         const nextWorld = simulateNextMinute(lastWorld);
         worldSimulations.push(nextWorld);
     }
     const secondsTaken = (Date.now() - start) / 1000;
-    console.log(simulationsGenerated, 'simulations took', secondsTaken.toPrecision(20),'seconds');
-    debugHeap();
+    console.log(simulationsGenerated, 'simulations took', secondsTaken.toPrecision(2), 'seconds');
 
     const movesTaken = {
         there: 0,
@@ -497,7 +472,7 @@ export default function() {
     console.log('======= THERE AGAIN =========');
     const thereAgainWorldSimulations = worldSimulations.slice(movesTaken.there + movesTaken.back);
 
-    // NOTE: use the same expedition state at the beginning
+    // NOTE: use the same expedition state as at the beginning
     const thereAgainSolutionPath = solve(thereAgainWorldSimulations, there);
     movesTaken.thereAgain = thereAgainSolutionPath.moves.length;
     console.log(visualizeCandidate(thereAgainWorldSimulations, thereAgainSolutionPath, there));

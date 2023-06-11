@@ -236,9 +236,6 @@ function generatePossibilities(position: Coordinate, world: World): Array<ValidM
     const candidates: Array<ValidMove> = [];
 
     // do the usual checks
-    const up = { row: row - 1, col };
-    const upLetter = getLetter(world, up);    
-
     const down = { row: row + 1, col };
     const downLetter = getLetter(world, down);    
     if (downLetter !== '#' && !isBlizzard(downLetter)) {
@@ -268,6 +265,8 @@ function generatePossibilities(position: Coordinate, world: World): Array<ValidM
 
     // the row >= 0 is just because you can start at the entrance
     // with no walls above you 🙄
+    const up = { row: row - 1, col };
+    const upLetter = getLetter(world, up);    
     if (up.row >= 0 && upLetter !== '#' && !isBlizzard(upLetter)) {
         candidates.push({
             move: '^',
@@ -420,17 +419,17 @@ function solve(worldStates: { [time: number]: World}): Path {
         //     // console.log(visualizeCandidate(worldStates, candidate));
         // })
         
-        if (candidates.length % 100 === 0 && candidates.length > 0) {
-            console.log(`Candidate space is ${candidates.length}, time ${time}`);            
-            console.log('   CANDIDATE', 0, {
-                time: candidates[0].moves.length,
-                score: distanceFromExit(candidates[0].currentPosition, exit)
-            });
-            console.log('   CANDIDATE', candidates.length - 1, {
-                time: candidates[candidates.length - 1].moves.length,
-                score: distanceFromExit(candidates[candidates.length - 1].currentPosition, exit)
-            });
-        }
+        // if (candidates.length % 100 === 0 && candidates.length > 0) {
+        //     console.log(`Candidate space is ${candidates.length}, time ${time}`);            
+        //     console.log('   CANDIDATE', 0, {
+        //         time: candidates[0].moves.length,
+        //         score: distanceFromExit(candidates[0].currentPosition, exit)
+        //     });
+        //     console.log('   CANDIDATE', candidates.length - 1, {
+        //         time: candidates[candidates.length - 1].moves.length,
+        //         score: distanceFromExit(candidates[candidates.length - 1].currentPosition, exit)
+        //     });
+        // }
     }
 
     throw new Error('Ran out of candidates and could not find a path!');
@@ -448,18 +447,18 @@ export default function() {
     console.log('Generating simulations');
     const start = Date.now();
     const simulationsGenerated = MAX_SIMULATIONS;
-    // generate simulate the crap out of the world
+    // simulate the crap out of the world
     for (let t = 1; t <= simulationsGenerated; t += 1) {
         const lastWorld = worldSimulations[t-1];
         const nextWorld = simulateNextMinute(lastWorld);
         worldSimulations.push(nextWorld);
     }
     const secondsTaken = (Date.now() - start) / 1000;
-    console.log(simulationsGenerated, 'simulations took', secondsTaken.toPrecision(20),'seconds');
+    console.log(simulationsGenerated, 'simulations took', secondsTaken.toPrecision(2),'seconds');
     debugHeap();
 
     const solutionPath = solve(worldSimulations);
     console.log(visualizeCandidate(worldSimulations, solutionPath));
 
-    return solutionPath
+    return solutionPath.moves.length;
 }
